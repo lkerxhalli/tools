@@ -1,17 +1,28 @@
+### Creates a estimated payment schedule per week
+### input: 
+###       1. AP Payment report exported from Netsuite
+###       2. Open Bills report exported from Netsuite
+###
+### output:
+###      Estimated payment schedule per vendor per week
+###
+
+
 import sys
 import os
 import csv
 import datetime
+from  datetime import timedelta
 from re import sub
 from decimal import Decimal
 
-directory = '/Users/lkerxhalli/Documents/iris/python/aug1/'
+directory = '/Users/lkerxhalli/Documents/iris/aug1/'
 csvinputfile = directory + 'AP Payments 1.17-7.17.csv'
-csvopenbills = directory + 'Open Bills 8.1.17'
+csvopenbills = directory + 'Open Bills 8.1.17.csv'
 csvoutputfile = directory + 'AP Payments 1.17-7.17 out.csv'
 year = 2017
 
-outdict = {}
+
 
 def parseName(str):
 	if str.find(' - ') <= 0:
@@ -23,15 +34,21 @@ def parseName(str):
 	index = strout.index(' ') + 1
 	return strout[index:]
 	
+def parseNameFromBill(str):
+	index = str.index(' ') + 1
+	return str[index:]
+	
+def getDate(strDate):
+	return datetime.datetime.strptime(strDate, "%m/%d/%y").date()
+	
 def getWeekNumber(strDate):
-	dt = datetime.datetime.strptime(strDate, "%m/%d/%y").date()
+	dt = getDate(strDate)
 	return dt.isocalendar()[1]
 	
-def getWeekHeader(strDate):
-	dt = datetime.datetime.strptime(strDate, "%m/%d/%y").date()
+def getWeekHeader(dt):
 	year = dt.isocalendar()[0]
 	weekNo = dt.isocalendar()[1]
-	strDt = "{}-W{}".format(year, weekNumber)
+	strDt = "{}-W{}".format(year, weekNo)
 	monday = datetime.datetime.strptime(strDt + '-1', "%Y-W%W-%w")
 	sunday = monday + datetime.timedelta(days=6)
 	return monday.strftime('%m/%d/%y') + ' - ' + sunday.strftime('%m/%d/%y')
@@ -56,6 +73,13 @@ def isLineFull(strLine):
 		return True
 	else:
 		return False
+
+def isOpenBillLine(strLine):
+	arrLine = strLine.split(',')
+	if len(arrLine) > 5 and arrLine[5]:
+		return True
+	else:
+		return False
 	
 def removeFileHeader():
 	with open(csvinputfile, 'r') as fin:
@@ -69,40 +93,108 @@ def removeFileHeader():
 	
 	with open(csvinputfile, 'w') as fout:
 	    fout.writelines(data[noLinesToSkip:])
+		
+	# clean open bills
+	with open(csvopenbills, 'rU') as fin:
+		data = fin.read().splitlines(True)
+	outData = []
+	for line in data:
+		if isOpenBillLine(line):
+			outData.append(line)
+	
+	with open(csvopenbills, 'w') as fout:
+	    fout.writelines(outData)	
+		
+def generateHeader(firstDate, lastDate):
+	currentDate = firstDate
+	header = ['Name']
+	while currentDate < lastDate:
+		header.append(getWeekHeader(currentDate))
+		currentDate = currentDate + timedelta(days=7)
+	#take care of last date
+	lastWeekHeader = getWeekHeader(lastDate)
+	if header[-1] != lastWeekHeader:
+		header.append(lastWeekHeader)
+	
+	header.append('Bills > 30')
+	return header
+
 
 def main():
 	#let's remove any extra lines at the top (Titles etc)
 	removeFileHeader()
-	#now process csv
+	
+	outdict = {}
+	
+	firstDate = getDate('01/01/40') #initialize them
+	lastDate = getDate('01/01/10')
+	
+	#now read payment csv
 	with open(csvinputfile, 'rU') as s_file:
 		csv_r = csv.DictReader(s_file)
 		
-		tmpTransaction = ''
+		tmpTransaction = '' # transaction string includes the vendor name
 		
 		for csv_row in csv_r:
 			if csv_row['Transaction']:
 				tmpTransaction = parseName(csv_row['Transaction'])
 				if not tmpTransaction in outdict:
-					outdict[tmpTransaction] = [0]*53
+					outdict[tmpTransaction] = {}
 			if csv_row['Bill Type'] == 'Bill Payment':
-				week = getWeekNumber(csv_row['Date'])
+				dt = getDate(csv_row['Date'])
+				week = getWeekHeader(dt)
+				if dt > lastDate:
+					lastDate = dt
+				if dt < firstDate:
+					firstDate = dt
 				amount = getNumber(csv_row['Amount'])
-				outdict[tmpTransaction][week] += amount
+				if not week in outdict[tmpTransaction]:
+					outdict[tmpTransaction][week] = amount
+				else:
+					outdict[tmpTransaction][week] += amount
 	
+	#read open bills csv
+	openBillsDict = {}
+	with open(csvopenbills, 'rU') as s_file:
+		csv_r = csv.DictReader(s_file)
+		for csv_row in csv_r:
+			delta = datetime.date.today() - getDate(csv_row['Date Due'])
+			if(delta.days > 30):
+				vendor = parseNameFromBill(csv_row['Vendor'])
+				amount = getNumber(csv_row['Amount Due'])
+				if vendor in openBillsDict:
+					openBillsDict[vendor] += amount
+				else:
+					openBillsDict[vendor] = amount
 	
-	headers = ['Name']
-	for i in range(1,52):
-		headers.append(getDateRange(i))
+	for vendor in openBillsDict:
+		if vendor in outdict:
+			outdict[vendor]['Bills > 30'] = openBillsDict[vendor]
+			
+	print outdict['Wells Fargo Bank N.A.']
+	
+	print firstDate
+	
+	print lastDate
+	
+	print openBillsDict['HIG Capital, LLC']
+	
+	header = generateHeader(firstDate, lastDate)
 		
+	#TNE for the names
+
 	with open(csvoutputfile, 'w') as wfile:
 		csvw = csv.writer(wfile, dialect='excel')
-		csvw.writerow(headers)
+		csvw.writerow(header)
 		for key in outdict:
-			outList = outdict[key]
-			outList[0] = key
-			csvw.writerow(outList)
 			
-		# csvw.writerows(lstCsvOut)
+			row = [key]
+			for col in header[1:]:
+				if col in outdict[key]:
+					row.append(outdict[key][col])
+				else:
+					row.append(0)
+			csvw.writerow(row)
 	
 	
 	
