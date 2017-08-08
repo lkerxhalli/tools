@@ -22,6 +22,11 @@ csvopenbills = directory + 'Open Bills 8.1.17.csv'
 csvoutputfile = directory + 'AP Payments 1.17-7.17 out.csv'
 year = 2017
 
+hName = 'Name'
+hBill = 'Bills > 30'
+hAvg = 'Avg.'
+hAvgAdjust = 'Avg. Adjusted'
+extraHeaders = 4 #headers that are not weeks
 
 
 def parseName(str):
@@ -107,7 +112,7 @@ def removeFileHeader():
 		
 def generateHeader(firstDate, lastDate):
 	currentDate = firstDate
-	header = ['Name']
+	header = [hName]
 	while currentDate < lastDate:
 		header.append(getWeekHeader(currentDate))
 		currentDate = currentDate + timedelta(days=7)
@@ -116,11 +121,15 @@ def generateHeader(firstDate, lastDate):
 	if header[-1] != lastWeekHeader:
 		header.append(lastWeekHeader)
 	
-	header.append('Bills > 30')
+	header.append(hBill)
+	header.append(hAvg)
+	header.append(hAvgAdjust)
 	return header
 
 
 def main():
+	print '-- Start --'
+	print '-- Clean csvs --'
 	#let's remove any extra lines at the top (Titles etc)
 	removeFileHeader()
 	
@@ -129,6 +138,9 @@ def main():
 	firstDate = getDate('01/01/40') #initialize them
 	lastDate = getDate('01/01/10')
 	
+	weeks = 0 # number of weeks
+	
+	print '-- reading AP --'
 	#now read payment csv
 	with open(csvinputfile, 'rU') as s_file:
 		csv_r = csv.DictReader(s_file)
@@ -153,7 +165,12 @@ def main():
 				else:
 					outdict[tmpTransaction][week] += amount
 	
+	header = generateHeader(firstDate, lastDate)
+	weeks = len(header) - extraHeaders
+	print 'Number of weeks: {}'.format(weeks)
+	
 	#read open bills csv
+	print '-- reading open bills --'
 	openBillsDict = {}
 	with open(csvopenbills, 'rU') as s_file:
 		csv_r = csv.DictReader(s_file)
@@ -169,17 +186,22 @@ def main():
 	
 	for vendor in openBillsDict:
 		if vendor in outdict:
-			outdict[vendor]['Bills > 30'] = openBillsDict[vendor]
+			outdict[vendor][hBill] = openBillsDict[vendor]
+	
+	for vendor in outdict:
+		avg = 0
+		for key in outdict[vendor]:
+			if key != hName and key != hBill:
+				avg += outdict[vendor][key]
+		if weeks > 0:
+			outdict[vendor][hAvg] = round(avg/weeks, 2)
+			if hBill in outdict[vendor]:
+				outdict[vendor][hAvgAdjust] = round((avg + outdict[vendor][hBill])/weeks, 2)
+			else:
+				outdict[vendor][hAvgAdjust] = outdict[vendor][hAvg]
 			
-	print outdict['Wells Fargo Bank N.A.']
-	
-	print firstDate
-	
-	print lastDate
-	
-	print openBillsDict['HIG Capital, LLC']
-	
-	header = generateHeader(firstDate, lastDate)
+			
+	print '-- Completing Calculations --'
 		
 	#TNE for the names
 
@@ -187,14 +209,16 @@ def main():
 		csvw = csv.writer(wfile, dialect='excel')
 		csvw.writerow(header)
 		for key in outdict:
-			
-			row = [key]
-			for col in header[1:]:
-				if col in outdict[key]:
-					row.append(outdict[key][col])
-				else:
-					row.append(0)
-			csvw.writerow(row)
+			if key:
+				row = [key]
+				for col in header[1:]:
+					if col in outdict[key]:
+						row.append(outdict[key][col])
+					else:
+						row.append(0)
+				csvw.writerow(row)
+	
+	print '-- finito --'
 	
 	
 	
