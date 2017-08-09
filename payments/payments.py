@@ -1,3 +1,4 @@
+### Auth: Lorenc Kerxhalli
 ### Creates a estimated payment schedule per week
 ### input: 
 ###       1. AP Payment report exported from Netsuite
@@ -13,6 +14,7 @@ import os
 import csv
 import datetime
 from  datetime import timedelta
+import re
 from re import sub
 from decimal import Decimal
 
@@ -20,35 +22,33 @@ directory = '/Users/lkerxhalli/Documents/iris/aug1/'
 csvinputfile = directory + 'AP Payments 1.17-7.17.csv'
 csvopenbills = directory + 'Open Bills 8.1.17.csv'
 csvoutputfile = directory + 'AP Payments 1.17-7.17 out.csv'
-year = 2017
 
 hName = 'Name'
-hBill = 'Bills > 30'
+hBill = 'Bills > 30' # change agingDays below if you change the number here as well
 hAvg = 'Avg.'
 hAvgAdjust = 'Avg. Adjusted'
 extraHeaders = 4 #headers that are not weeks
+agingDays = 30 #number of recent days to ignore from open bills
 
 
 def parseName(str):
-	if str.find(' - ') <= 0:
+	p = re.compile('V[0-9]{5}')
+	m = p.search(str)
+	if(m):
+		index = m.end() + 1
+		return str[index:]
+	else:
 		return None
-	arr = str.split(' - ')
-	strout = arr[-1]
-	if strout.find(' ') <= 0:
-		print str
-	index = strout.index(' ') + 1
-	return strout[index:]
 	
-def parseNameFromBill(str):
-	index = str.index(' ') + 1
-	return str[index:]
 	
 def getDate(strDate):
-	return datetime.datetime.strptime(strDate, "%m/%d/%y").date()
-	
-def getWeekNumber(strDate):
-	dt = getDate(strDate)
-	return dt.isocalendar()[1]
+	# check if strdate year part is 2 digit or 4
+	lIndex = strDate.rfind('/') + 1 # index of first digit
+	strYear = strDate[lIndex:]
+	if(len(strYear) == 2):
+		return datetime.datetime.strptime(strDate, "%m/%d/%y").date()
+	else:
+		return datetime.datetime.strptime(strDate, "%m/%d/%Y").date()
 	
 def getWeekHeader(dt):
 	year = dt.isocalendar()[0]
@@ -57,12 +57,6 @@ def getWeekHeader(dt):
 	monday = datetime.datetime.strptime(strDt + '-1', "%Y-W%W-%w")
 	sunday = monday + datetime.timedelta(days=6)
 	return monday.strftime('%m/%d/%y') + ' - ' + sunday.strftime('%m/%d/%y')
-
-def getDateRange(weekNumber):
-	strDt = "{}-W{}".format(year, weekNumber)
-	monday = datetime.datetime.strptime(strDt + '-1', "%Y-W%W-%w")
-	sunday = monday + datetime.timedelta(days=6)
-	return monday.strftime('%m/%d/%Y') + ' - ' + sunday.strftime('%m/%d/%Y')
 
 def getNumber(strMoney):
 	value = Decimal(sub(r'[^\d.]', '', strMoney))
@@ -128,8 +122,8 @@ def generateHeader(firstDate, lastDate):
 
 
 def main():
-	print '-- Start --'
-	print '-- Clean csvs --'
+	print ('-- Start --')
+	print ('-- Clean csvs --')
 	#let's remove any extra lines at the top (Titles etc)
 	removeFileHeader()
 	
@@ -140,7 +134,7 @@ def main():
 	
 	weeks = 0 # number of weeks
 	
-	print '-- reading AP --'
+	print ('-- reading AP --')
 	#now read payment csv
 	with open(csvinputfile, 'rU') as s_file:
 		csv_r = csv.DictReader(s_file)
@@ -167,27 +161,29 @@ def main():
 	
 	header = generateHeader(firstDate, lastDate)
 	weeks = len(header) - extraHeaders
-	print 'Number of weeks: {}'.format(weeks)
+	print ('Number of weeks: {}'.format(weeks))
 	
 	#read open bills csv
-	print '-- reading open bills --'
+	print ('-- reading open bills --')
 	openBillsDict = {}
 	with open(csvopenbills, 'rU') as s_file:
 		csv_r = csv.DictReader(s_file)
 		for csv_row in csv_r:
 			delta = datetime.date.today() - getDate(csv_row['Date Due'])
 			if(delta.days > 30):
-				vendor = parseNameFromBill(csv_row['Vendor'])
+				vendor = parseName(csv_row['Vendor'])
 				amount = getNumber(csv_row['Amount Due'])
 				if vendor in openBillsDict:
 					openBillsDict[vendor] += amount
 				else:
 					openBillsDict[vendor] = amount
 	
+	#add open bills to the main dictionary
 	for vendor in openBillsDict:
 		if vendor in outdict:
 			outdict[vendor][hBill] = openBillsDict[vendor]
 	
+	#calculate and add averages
 	for vendor in outdict:
 		avg = 0
 		for key in outdict[vendor]:
@@ -201,10 +197,12 @@ def main():
 				outdict[vendor][hAvgAdjust] = outdict[vendor][hAvg]
 			
 			
-	print '-- Completing Calculations --'
+	print ('-- Completing Calculations --')
 		
-	#TNE for the names
-
+	#TODO: find and Sort for TNE for the names
+	
+	# for python 3 use below to prevent extra blank lines
+	# with open(csvoutputfile, 'w', newline='') as wfile:
 	with open(csvoutputfile, 'w') as wfile:
 		csvw = csv.writer(wfile, dialect='excel')
 		csvw.writerow(header)
@@ -218,7 +216,7 @@ def main():
 						row.append(0)
 				csvw.writerow(row)
 	
-	print '-- finito --'
+	print ('-- finito --')
 	
 	
 	
