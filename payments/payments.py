@@ -18,10 +18,10 @@ import re
 from re import sub
 from decimal import Decimal
 
-directory = '/Users/lkerxhalli/Documents/iris/aug1/'
-csvinputfile = directory + 'AP Payments 1.17-7.17.csv'
-csvopenbills = directory + 'Open Bills 8.1.17.csv'
-csvoutputfile = directory + 'AP Payments 1.17-7.17 out.csv'
+directory = '/Users/lkerxhalli/Documents/iris/sep11/'
+csvinputfile = directory + 'NPS payment history.csv'
+csvopenbills = directory + 'NPS Open bills.csv'
+csvoutputfile = directory + 'NPS payment history out.csv'
 
 hName = 'Name'
 hBill = 'Bills > 30' # change agingDays below if you change the number here as well
@@ -29,6 +29,11 @@ hAvg = 'Avg.'
 hAvgAdjust = 'Avg. Adjusted'
 extraHeaders = 4 #headers that are not weeks
 agingDays = 30 #number of recent days to ignore from open bills
+
+
+# TODO continue
+# def isStringCompany(str):
+	
 
 
 def parseName(str):
