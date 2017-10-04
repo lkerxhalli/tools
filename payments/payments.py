@@ -18,10 +18,10 @@ import re
 from re import sub
 from decimal import Decimal
 
-directory = '/Users/lkerxhalli/Documents/iris/sep11/'
-csvinputfile = directory + 'NPS payment history.csv'
-csvopenbills = directory + 'NPS Open bills.csv'
-csvoutputfile = directory + 'NPS payment history out.csv'
+directory = '/Users/lkerxhalli/Documents/iris/oct3/'
+csvinputfile = directory + 'Payments CIS.csv'
+csvopenbills = directory + 'Open Bills CIS.csv'
+csvoutputfile = directory + 'Payments CIS out.csv'
 
 hName = 'Name'
 hBill = 'Bills > 30' # change agingDays below if you change the number here as well
@@ -52,8 +52,10 @@ def getDate(strDate):
 	strYear = strDate[lIndex:]
 	if(len(strYear) == 2):
 		return datetime.datetime.strptime(strDate, "%m/%d/%y").date()
-	else:
+	elif (len(strYear) == 4):
 		return datetime.datetime.strptime(strDate, "%m/%d/%Y").date()
+	else:
+		return None
 	
 def getWeekHeader(dt):
 	year = dt.isocalendar()[0]
@@ -174,14 +176,15 @@ def main():
 	with open(csvopenbills, 'rU') as s_file:
 		csv_r = csv.DictReader(s_file)
 		for csv_row in csv_r:
-			delta = datetime.date.today() - getDate(csv_row['Date Due'])
-			if(delta.days > 30):
-				vendor = parseName(csv_row['Vendor'])
-				amount = getNumber(csv_row['Amount Due'])
-				if vendor in openBillsDict:
-					openBillsDict[vendor] += amount
-				else:
-					openBillsDict[vendor] = amount
+			if getDate(csv_row['Date Due']):
+				delta = datetime.date.today() - getDate(csv_row['Date Due'])
+				if(delta.days > 30):
+					vendor = parseName(csv_row['Vendor'])
+					amount = getNumber(csv_row['Amount Due'])
+					if vendor in openBillsDict:
+						openBillsDict[vendor] += amount
+					else:
+						openBillsDict[vendor] = amount
 	
 	#add open bills to the main dictionary
 	for vendor in openBillsDict:
