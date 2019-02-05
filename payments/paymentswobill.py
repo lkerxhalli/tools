@@ -18,11 +18,10 @@ import re
 from re import sub
 from decimal import Decimal
 
-directory = '/Users/lkerxhalli/Documents/iris/jan29/'
-fname = 'CIS'
-csvinputfile = directory + fname + ' payments.csv'
-csvopenbills = directory + fname + ' open bills.csv'
-csvoutputfile = directory + fname + ' out.csv'
+directory = '/Users/lkerxhalli/Documents/iris/jan15/AP/'
+name = 'AFS Vendor Payments 2018'
+csvinputfile = directory + name + '.csv'
+csvoutputfile = directory + name +  ' out.csv'
 
 hName = 'Name'
 hBill = 'Bills > 30' # change agingDays below if you change the number here as well
@@ -68,6 +67,8 @@ def getWeekHeader(dt):
 
 def getNumber(strMoney):
 	value = Decimal(sub(r'[^\d.]', '', strMoney))
+	if strMoney.find('(') > -1:
+		value = value * -1
 	return value
 
 def isLineFull(strLine):
@@ -90,7 +91,7 @@ def isOpenBillLine(strLine):
 
 def removeFileHeader():
 	with open(csvinputfile, 'r') as fin:
-	    data = fin.read().splitlines(True)
+		data = fin.read().splitlines(True)
 	noLinesToSkip = 0
 	for line in data:
 		if isLineFull(line):
@@ -99,18 +100,8 @@ def removeFileHeader():
 			noLinesToSkip += 1
 
 	with open(csvinputfile, 'w') as fout:
-	    fout.writelines(data[noLinesToSkip:])
+		fout.writelines(data[noLinesToSkip:])
 
-	# clean open bills
-	with open(csvopenbills, 'rU') as fin:
-		data = fin.read().splitlines(True)
-	outData = []
-	for line in data:
-		if isOpenBillLine(line):
-			outData.append(line)
-
-	with open(csvopenbills, 'w') as fout:
-	    fout.writelines(outData)
 
 def generateHeader(firstDate, lastDate):
 	currentDate = firstDate
@@ -171,26 +162,6 @@ def main():
 	weeks = len(header) - extraHeaders
 	print ('Number of weeks: {}'.format(weeks))
 
-	#read open bills csv
-	print ('-- reading open bills --')
-	openBillsDict = {}
-	with open(csvopenbills, 'rU') as s_file:
-		csv_r = csv.DictReader(s_file)
-		for csv_row in csv_r:
-			if getDate(csv_row['Date Due']):
-				delta = datetime.date.today() - getDate(csv_row['Date Due'])
-				if(delta.days > 30):
-					vendor = parseName(csv_row['Vendor'])
-					amount = getNumber(csv_row['Amount Due'])
-					if vendor in openBillsDict:
-						openBillsDict[vendor] += amount
-					else:
-						openBillsDict[vendor] = amount
-
-	#add open bills to the main dictionary
-	for vendor in openBillsDict:
-		if vendor in outdict:
-			outdict[vendor][hBill] = openBillsDict[vendor]
 
 	#calculate and add averages
 	for vendor in outdict:
