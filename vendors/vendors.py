@@ -18,9 +18,9 @@ import re
 from re import sub
 from decimal import Decimal
 
-directory = '/Users/lkerxhalli/Documents/iris/feb4/'
-csvinputfile = directory + 'TransactionSearchResults253.csv'
-csvoutputfile = directory + 'VendorSummary384.csv'
+directory = '/Users/lkerxhalli/Documents/iris/jun12/'
+csvinputfile = directory + 'TransactionSearchResults374.csv'
+csvoutputfile = directory + 'VendorSummary374.csv'
 
 
 def main():

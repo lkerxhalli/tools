@@ -1,11 +1,10 @@
 ### Auth: Lorenc Kerxhalli
-### Creates a estimated payment schedule per week
+### Creates a estimated payment schedule per month
 ### input:
-###       1. AP Payment report exported from Netsuite
-###       2. Open Bills report exported from Netsuite
+###       1. Invoices Payment report exported from Netsuite
 ###
 ### output:
-###      Estimated payment schedule per vendor per week
+###      Estimated payment schedule per vendor per month
 ###
 
 
@@ -14,12 +13,14 @@ import os
 import csv
 import datetime
 from  datetime import timedelta
+import calendar
+from dateutil.relativedelta import *
 import re
 from re import sub
 from decimal import Decimal
 
-directory = '/Users/lkerxhalli/Documents/iris/jun13/'
-name = 'NPS 1.1.19 4.30.19'
+directory = '/Users/lkerxhalli/Documents/iris/jun14/'
+name = 'A_PPaymentHistorybyBill968'
 csvinputfile = directory + name + '.csv'
 csvoutputfile = directory + name +  ' out.csv'
 
@@ -27,7 +28,7 @@ hName = 'Name'
 hBill = 'Bills > 30' # change agingDays below if you change the number here as well
 hAvg = 'Avg.'
 hAvgAdjust = 'Avg. Adjusted'
-extraHeaders = 4 #headers that are not weeks
+extraHeaders = 4 #headers that are not months
 agingDays = 30 #number of recent days to ignore from open bills
 
 
@@ -37,13 +38,15 @@ agingDays = 30 #number of recent days to ignore from open bills
 
 
 def parseName(str):
-    p = re.compile('V[0-9]{5}')
+    p = re.compile(' V[0-9]{5}')
     m = p.search(str)
     if(m):
         index = m.end() + 1
         return str[index:]
     else:
         return None
+
+
 
 
 def getDate(strDate):
@@ -57,13 +60,11 @@ def getDate(strDate):
     else:
         return None
 
-def getWeekHeader(dt):
+def getMonthHeader(dt):
     year = dt.isocalendar()[0]
-    weekNo = dt.isocalendar()[1]
-    strDt = "{}-W{}".format(year, weekNo)
-    monday = datetime.datetime.strptime(strDt + '-1', "%Y-W%W-%w")
-    sunday = monday + datetime.timedelta(days=6)
-    return monday.strftime('%m/%d/%y') + ' - ' + sunday.strftime('%m/%d/%y')
+    month = dt.month
+    strDt = "{} {}".format(calendar.month_abbr[month], year)
+    return strDt
 
 def getNumber(strMoney):
     value = Decimal(sub(r'[^\d.]', '', strMoney))
@@ -113,12 +114,12 @@ def generateHeader(firstDate, lastDate):
     currentDate = firstDate
     header = [hName]
     while currentDate < lastDate:
-        header.append(getWeekHeader(currentDate))
-        currentDate = currentDate + timedelta(days=7)
+        header.append(getMonthHeader(currentDate))
+        currentDate = currentDate + relativedelta(months=+1)
     #take care of last date
-    lastWeekHeader = getWeekHeader(lastDate)
-    if header[-1] != lastWeekHeader:
-        header.append(lastWeekHeader)
+    lastMonthHeader = getMonthHeader(lastDate)
+    if header[-1] != lastMonthHeader:
+        header.append(lastMonthHeader)
 
     header.append(hBill)
     header.append(hAvg)
@@ -137,7 +138,7 @@ def main():
     firstDate = getDate('01/01/40') #initialize them
     lastDate = getDate('01/01/10')
 
-    weeks = 0 # number of weeks
+    months = 0 # number of months
 
     print ('-- reading AP --')
     #now read payment csv
@@ -151,22 +152,22 @@ def main():
                 tmpTransaction = parseName(csv_row['Transaction'])
                 if not tmpTransaction in outdict:
                     outdict[tmpTransaction] = {}
-            if csv_row['Bill Type'] == 'Bill Payment' or csv_row['Bill Type'] == 'JE':
+            if csv_row['Payment Type'] == 'Bill':
                 dt = getDate(csv_row['Date'])
-                week = getWeekHeader(dt)
+                month = getMonthHeader(dt)
                 if dt > lastDate:
                     lastDate = dt
                 if dt < firstDate:
                     firstDate = dt
                 amount = getNumber(csv_row['Amount'])
-                if not week in outdict[tmpTransaction]:
-                    outdict[tmpTransaction][week] = amount
+                if not month in outdict[tmpTransaction]:
+                    outdict[tmpTransaction][month] = amount
                 else:
-                    outdict[tmpTransaction][week] += amount
+                    outdict[tmpTransaction][month] += amount
 
     header = generateHeader(firstDate, lastDate)
-    weeks = len(header) - extraHeaders
-    print ('Number of weeks: {}'.format(weeks))
+    months = len(header) - extraHeaders
+    print ('Number of months: {}'.format(months))
 
 
     #calculate and add averages
@@ -175,10 +176,10 @@ def main():
         for key in outdict[vendor]:
             if key != hName and key != hBill:
                 avg += outdict[vendor][key]
-        if weeks > 0:
-            outdict[vendor][hAvg] = round(avg/weeks, 2)
+        if months > 0:
+            outdict[vendor][hAvg] = round(avg/months, 2)
             if hBill in outdict[vendor]:
-                outdict[vendor][hAvgAdjust] = round((avg + outdict[vendor][hBill])/weeks, 2)
+                outdict[vendor][hAvgAdjust] = round((avg + outdict[vendor][hBill])/months, 2)
             else:
                 outdict[vendor][hAvgAdjust] = outdict[vendor][hAvg]
 
